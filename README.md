@@ -5,10 +5,7 @@ Code and data to reproduce every analysis and figure in:
 > **Investigating Movement, Synchrony, or Habitats in Species Distribution?
 > A Centering View of Empirical Orthogonal Functions.**
 
-both in the main text and the Supplementary Material. This repository
-contains exactly the pipeline needed to reproduce the submitted manuscript
-— common sole (*Solea solea*) case study only, no unused sensitivity
-analyses or exploratory scripts.
+both in the main text and the Supplementary Material.
 
 ## Requirements
 
@@ -24,10 +21,6 @@ install.packages(c(
 ))
 ```
 
-No non-CRAN or GitHub-only packages are required. `sf`/`terra` need their
-usual system dependencies (GDAL/GEOS/PROJ); see the respective CRAN pages
-if `install.packages()` fails on those.
-
 ## How to run
 
 From an R session with the working directory set to this repository's
@@ -39,14 +32,7 @@ source("run_all.R")
 
 This runs the full pipeline (`R/00`, `01`, `02`, `03`, in that order) and
 writes every figure under `images/` and every intermediate result under
-`res/`. Steps `00`-`02` run in well under a minute; step `03` runs 200
-simulation replicates and takes a few minutes (reduce `n_reps` at the top
-of `R/03_simulation_metrics_figures.R` for a quick smoke test — results
-will then differ slightly from `res/reference_outputs/`).
-
-Each script can also be sourced individually, in numeric order (later
-scripts depend on objects/files written by earlier ones — see each
-script's header comment for its exact inputs).
+`res/`.
 
 ## Repository structure
 
@@ -83,7 +69,7 @@ run_all.R                       master script; sources R/00, 01, 02, 03 in order
 
 `data/S_x_df_Solea_solea_standardise.RData` contains the standardized
 spatio-temporal biomass index (`S_x`) per grid cell (`x`,`y`) and month
-(`Year_Month`) for common sole, already anonymized/standardized as used in
+(`Year_Month`) for common sole, already standardized as used in
 the manuscript's Bay of Biscay case study (2008-2018).
 
 ## Mapping from script to manuscript/SM output
