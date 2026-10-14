@@ -4,6 +4,10 @@
 ## Distribution? A Centering View of Empirical Orthogonal Functions"
 #####################################################################
 
+## N.B. This repository was cleaned up with the help of an AI assistant (Claude).
+## For the original code, or if you have any questions, do not hesitate
+## to contact me at baptiste.alglave@univ-ubs.fr
+
 source("R/00_init.R")                      # packages, paths, helper functions
 source("R/01_load_data.R")                 # load + reshape the sole distribution data
 source("R/02_eof_real_data.R")             # EOFs under the 3 centering models

@@ -77,52 +77,105 @@ phi <- phi_raw / sd(phi_raw)                                           # unit-va
 xi_mat <- sqrt(sigma2_seasonal) * outer(eta, phi)                       # n x T, rank-1 interaction
 
 # ---- GRF spatial covariance (noise term) -------------------------------------
+# The spatially structured noise is a Gaussian random field (GRF) simulated on
+# a coarse regular grid of grf_m x grf_m nodes, then projected onto the
+# observation locations by bilinear interpolation. This keeps the Cholesky
+# factorisation cheap (m2 = grf_m^2 nodes instead of one per location).
+
+# Coarse grid covering the bounding box of the study area
 x_coarse <- seq(min(loc_x$x), max(loc_x$x), length.out = grf_m)
 y_coarse <- seq(min(loc_x$y), max(loc_x$y), length.out = grf_m)
-nodes <- as.matrix(expand.grid(x = x_coarse, y = y_coarse))
+nodes <- as.matrix(expand.grid(x = x_coarse, y = y_coarse))  # x varies fastest
 m2 <- nrow(nodes)
+
+# Exponential covariance with unit variance and range parameter grf_rho:
+# Cov(s, s') = exp(-||s - s'|| / grf_rho)
 D_coarse <- as.matrix(dist(nodes))
 Sigma_c <- exp(-D_coarse / grf_rho)
+
+# Lower-triangular Cholesky factor (Sigma_c = L L'); a small jitter on the
+# diagonal ensures numerical positive-definiteness.
+# A field on the nodes is then simulated as L %*% z, with z ~ N(0, I).
 L_chol <- t(chol(Sigma_c + diag(1e-8, m2)))
+
+# Grid spacing (regular grid)
 dx <- x_coarse[2] - x_coarse[1]; dy <- y_coarse[2] - y_coarse[1]
 
+# Sparse projection matrix A (n_locations x m2): each location receives a
+# bilinear interpolation of the 4 surrounding grid nodes, so the field at the
+# observation locations is A %*% (field on the nodes).
 build_bilinear_A <- function(fx, fy, xc, yc, dx, dy) {
   nn <- length(fx); mx <- length(xc); my <- length(yc)
+  # Index of the lower-left node of the cell containing each point
+  # (clamped so that points on the upper/right boundary use the last cell)
   ix <- pmax(1, pmin(mx-1, floor((fx-xc[1])/dx)+1))
   iy <- pmax(1, pmin(my-1, floor((fy-yc[1])/dy)+1))
+  # Relative position of each point within its cell, in [0, 1]
   tx <- pmax(0, pmin(1, (fx-xc[ix])/dx))
   ty <- pmax(0, pmin(1, (fy-yc[iy])/dy))
+  # Linear index of node (i, j), consistent with expand.grid ordering
   node <- function(i,j) (j-1L)*mx+i
+  # The 4 corner nodes of each cell: (00) lower-left, (10) lower-right,
+  # (01) upper-left, (11) upper-right
   c00 <- node(ix,iy); c10 <- node(ix+1L,iy); c01 <- node(ix,iy+1L); c11 <- node(ix+1L,iy+1L)
+  # Bilinear weights (they sum to 1 for each point)
   Matrix::sparseMatrix(i=rep(seq_len(nn),4), j=c(c00,c10,c01,c11),
-    x=c((1-tx)*(1-ty), tx*(1-ty), (1-tx)*ty, tx*ty), dims=c(nn, mx*my))
+                       x=c((1-tx)*(1-ty), tx*(1-ty), (1-tx)*ty, tx*ty), dims=c(nn, mx*my))
 }
 A <- build_bilinear_A(loc_x$x, loc_x$y, x_coarse, y_coarse, dx, dy)
+
+# Combined operator: a GRF realisation at the locations is AL %*% z, z ~ N(0, I)
 AL <- A %*% L_chol
+
+# Rescaling: interpolation shrinks the variance slightly (a weighted average
+# of nodes has variance < 1), so the empirical sd of one reference
+# realisation is used to rescale the field to the target variance sigma2_noise.
 set.seed(1); grf_sd_ref <- sd(as.numeric(AL %*% rnorm(m2)))
 noise_scale <- sqrt(sigma2_noise) / grf_sd_ref
 
 jitter_frac <- 0.05   # small perturbation, as a fraction of each term's sd
 
 # ---- one simulated replicate (noise + small jitter on mu/seas/trend) --------
+# Simulate one replicate dataset (n locations x T time steps).
+# Each replicate starts from the "true" components estimated on the real data
+# (mu, trend, xi_mat), slightly perturbed so that replicates differ beyond
+# the noise term alone. The latent value at location i and time t is
+#   x[i, t] = mu[i] + xi[i, t] + trend[t] + eps[i, t]
+# and the simulated abundance index is softplus(x) = log(1 + exp(x)) > 0.
 simulate_once <- function(seed) {
   set.seed(seed)
+  
+  # Perturbed spatial mean (one value per location) and temporal trend
+  # (one value per time step); jitter sd is a fraction of each term's sd
   mu_r    <- mu    + rnorm(n, sd = jitter_frac * sqrt(sigma2_spatial))
   trend_r <- trend + rnorm(T, sd = jitter_frac * sqrt(sigma2_temporal))
-
-  total_B <- matrix(0, nrow = T, ncol = n)
-  xi_last <- rep(0, n)
+  
+  total_B <- matrix(0, nrow = T, ncol = n)   # simulated values, T x n
+  xi_last <- rep(0, n)                       # seasonal term at the last time step
+  
   for (step in seq_len(T)) {
-
+    
+    # Seasonal / space-time interaction term at this time step, perturbed
     xi_ij <- xi_mat[, step] + rnorm(n, sd = jitter_frac * sqrt(sigma2_seasonal))
     xi_last <- xi_ij
-
+    
+    # Spatially structured noise: a new independent GRF realisation at each
+    # time step (no temporal correlation), centred so that it has zero
+    # spatial mean (it does not shift the overall level at this time step),
+    # then rescaled to the target variance sigma2_noise
     noise_raw <- as.numeric(AL %*% rnorm(m2)); noise_raw <- noise_raw - mean(noise_raw)
     noise <- noise_raw * noise_scale
-
+    
+    # Latent value = spatial mean + seasonal term + temporal trend + noise
     x <- mu_r + xi_ij + trend_r[step] + noise
+    
+    # Softplus link, log(1 + exp(x)), written in a numerically stable form
+    # (avoids overflow of exp(x) for large x)
     total_B[step, ] <- ifelse(x >= 0, x + log1p(exp(-x)), log1p(exp(x)))
   }
+  
+  # Zs: simulated data (n x T); the true (perturbed) components are returned
+  # so that EOF estimates can be compared with them in the recovery study
   list(Zs = t(total_B), seas = xi_last, mu = mu_r, trend = trend_r)   # Zs: n x T
 }
 
@@ -279,8 +332,7 @@ legend_plot_mean <- ggplot(mean_plot_df, aes(x = metric, y = value, fill = cente
   labs(fill = "Centering approach", pattern = "Centering approach") +
   theme_bw(base_size = 12) +
   theme(legend.position = "right", legend.title = element_blank())
-# see the note below (shared_legend) on why get_plot_component(..., return_all
-# = TRUE) is used instead of cowplot::get_legend() here.
+
 shared_legend_mean <- cowplot::get_plot_component(legend_plot_mean, "guide-box-right", return_all = TRUE)
 if (is.list(shared_legend_mean) && length(shared_legend_mean) == 1) shared_legend_mean <- shared_legend_mean[[1]]
 
@@ -298,10 +350,6 @@ cat("Done.\n")
 #---
 
 # ---- shared data prep -----------------------------------------------------------
-# NOTE: renamed to metric_labels_dim_q (not metric_labels_dim) so it can never
-# clobber the theta(...) version used by p_dim/p_mean above -- reassigning the
-# same name to plain text broke scales::parse_format() there if this block
-# ran (or was re-run) after those plots were built.
 metric_labels_dim_q <- c(
   u_meanspat = "Spatial eigenvector\nvs. true spatial mean",
   v_meantemp = "Temporal eigenvector\nvs. true temporal mean",
@@ -378,11 +426,7 @@ legend_plot <- ggplot(dim_plot_df, aes(x = metric, y = value, fill = center_type
         legend.text = element_text(margin = margin(l = 6)),
         legend.key.width = unit(1, "cm"),
         legend.title = element_blank())
-# cowplot::get_legend() searches for a grob named "guide-box"; ggplot2 >= 3.5
-# splits this into guide-box-top/bottom/left/right (even when only one is
-# populated), so get_legend() now matches several and warns, returning
-# just the first -- which may not be the one you want. Since
-# legend.position = "bottom" above, grab guide-box-bottom explicitly instead.
+
 shared_legend <- cowplot::get_plot_component(legend_plot, "guide-box-bottom", return_all = TRUE)
 if (is.list(shared_legend) && length(shared_legend) == 1) shared_legend <- shared_legend[[1]]
 
@@ -421,8 +465,6 @@ bbox_pad <- 0.5
 coast <- suppressWarnings(sf::st_crop(coast,
   xmin = min(loc_x$x) - bbox_pad, xmax = max(loc_x$x) + bbox_pad,
   ymin = min(loc_x$y) - bbox_pad, ymax = max(loc_x$y) + bbox_pad))
-# NOTE: assumes loc_x$x/$y are longitude/latitude (WGS84); adjust ne_countries()
-# scale or swap in your own coastline shapefile if a different CRS is used.
 
 seed_illustration <- 1
 sim1 <- simulate_once(seed_illustration)

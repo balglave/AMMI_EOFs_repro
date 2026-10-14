@@ -81,63 +81,50 @@ center_data <- function(data_matrix,center_type = 3){
 #' @param support support defining the factors (here factors are spatial so it is a data frame with longitudes and latitudes)
 #' @param res_svd results of the svd function on spatio-temporal data where lines are locations and rows are time steps
 #' @return plot of the factors (spatial)
-plot_factors <- function(support,res_svd,n_dim=2){
-  u_df <- data.frame(support,Dim=res_svd$u[,1:n_dim])
-  if(n_dim == 1){
-    u_df <- rename(u_df,Dim.1 = Dim)
-  }
+plot_factors <- function(support, res_svd, n_dim = 2) {
+  u_df <- data.frame(support, Dim = res_svd$u[, 1:n_dim])
+  if (n_dim == 1) u_df <- rename(u_df, Dim.1 = Dim)
   u_df <- u_df %>%
-    pivot_longer(cols = num_range("Dim.",1:n_dim)) %>%
-    rename(u = value,dim = name)
-  u_plot <- ggplot(u_df)+
-    geom_point(aes(x=x,y=y,col=u))+
-    facet_wrap(.~dim)+
-    scale_color_continuous_divergingx(palette = "Spectral", mid = 0,rev = T)+
-    geom_sf(data=mapBase)+
-    coord_sf(xlim = c(grid_xmin,grid_xmax),
-             ylim = c(grid_ymin,grid_ymax),
-             expand = FALSE)+
-    theme_bw()+xlab("")+ylab("")+
+    pivot_longer(cols = num_range("Dim.", 1:n_dim)) %>%
+    rename(u = value, dim = name)
+  
+  ggplot(u_df) +
+    geom_point(aes(x = x, y = y, col = u)) +
+    facet_wrap(. ~ dim) +
+    scale_color_gradient2(low = "#2166ac", mid = "white", high = "#b2182b", midpoint = 0) +
+    geom_sf(data = mapBase) +
+    coord_sf(xlim = c(grid_xmin, grid_xmax),
+             ylim = c(grid_ymin, grid_ymax),
+             expand = FALSE) +
+    theme_bw() + xlab("") + ylab("") +
     theme(legend.title = element_blank(),
-          axis.text.x = element_text(angle = 90,vjust = 0.5))
+          axis.text.x = element_text(angle = 90, vjust = 0.5))
 }
 
 ## Plot loadings
 #' @param support support defining the loadings (here loadings are temporal so it is a data frame with dates)
 #' @param res_svd results of the svd function on spatio-temporal data where lines are locations and rows are time steps
 #' @return plot of the factors (spatial)
-plot_loadings <- function(support,res_svd,n_dim=2){
-  v_df <- data.frame(support,Dim=res_svd$v[,1:n_dim])
-  if(n_dim == 1) v_df <- rename(v_df,Dim.1 = Dim)
+plot_loadings <- function(support, res_svd, n_dim = 2) {
+  v_df <- data.frame(support, Dim = res_svd$v[, 1:n_dim])
+  if (n_dim == 1) v_df <- rename(v_df, Dim.1 = Dim)
   v_df <- v_df %>%
-    pivot_longer(cols = num_range("Dim.",1:n_dim)) %>%
-    rename(v = value,dim = name)
-  v_plot = ggplot(v_df)+
-    geom_hline(yintercept=0,linetype="dashed", color = "black", size = 0.2)+
-    geom_line(size=1,aes(x=date,y=v,col=dim,group=dim))+
-    theme_bw()+
-    theme()+
-    xlab("")+ylab("")+
+    pivot_longer(cols = num_range("Dim.", 1:n_dim)) %>%
+    rename(v = value, dim = name)
+  
+  ggplot(v_df) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.2) +
+    geom_line(linewidth = 1, aes(x = date, y = v, col = dim, group = dim)) +
+    theme_bw() +
+    xlab("") + ylab("") +
     theme(legend.title = element_blank(),
-          aspect.ratio = c(1/4),
+          aspect.ratio = 1/4,
           legend.position = "none",
-          plot.margin = ggplot2::margin(2, 2, 2, 2, unit = "pt"))+
-    coord_cartesian(clip = "off")+
-    facet_wrap(.~dim,ncol = 1)+
-    geom_vline(xintercept = v_df$date[which(str_detect(v_df$date,"01-01"))],
-               linetype="dashed",color = "skyblue")
-}
-
-## Compute percentage of variance using the methods described in Bez et al. (2023)
-#' @param res_svd results of the svd function
-#' @param center_data anomaly field that is decomposed through svd
-#' @param n_dim number of dimension to consider in the analysis
-#' @return a vector with percentage of variance related to each dimension
-comput_perc_var <- function(res_svd,center_data,n_dim=10){
-  perc_var <- do.call(c,lapply(1:n_dim, function(i){
-    res <- tr(var(res_svd$d[i] * res_svd$u[,i] %*% t(res_svd$v[,i]))) / tr(var(Zs))
-  }))
-  return(perc_var)
+          plot.margin = ggplot2::margin(2, 2, 2, 2, unit = "pt")) +
+    coord_cartesian(clip = "off") +
+    facet_wrap(. ~ dim, ncol = 1) +
+    geom_vline(xintercept = v_df$date[which(str_detect(v_df$date, "01-01"))],
+               linetype = "dashed", color = "skyblue")
 }
 
 ## Trace function

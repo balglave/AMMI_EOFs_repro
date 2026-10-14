@@ -2,17 +2,18 @@
 
 Code and data to reproduce every analysis and figure in:
 
-> **Investigating Movement, Synchrony, or Habitats in Species Distribution?
-> A Centering View of Empirical Orthogonal Functions.**
+> **Investigating Movement, Synchrony, or Habitats in Species Distribution? A Centering View of Empirical Orthogonal Functions.**
 
 both in the main text and the Supplementary Material.
 
+N.B. This repository was cleaned up with the help of an AI assistant (Claude). For the original code, or if you have any questions, do not hesitate to contact me at [baptiste.alglave\@univ-ubs.fr](mailto:baptiste.alglave@univ-ubs.fr){.email}
+
 ## Requirements
 
-- R >= 4.2 (developed and last run under R 4.4)
+- R \>= 4.2 (developed and last run under R 4.4)
 - Packages:
 
-```r
+``` r
 install.packages(c(
   "colorspace", "cowplot", "dplyr", "ggtext", "ggpattern", "ggplot2",
   "latex2exp", "rnaturalearth", "rnaturalearthdata", "scales", "sf",
@@ -23,20 +24,17 @@ install.packages(c(
 
 ## How to run
 
-From an R session with the working directory set to this repository's
-root:
+From an R session with the working directory set to this repository's root:
 
-```r
+``` r
 source("run_all.R")
 ```
 
-This runs the full pipeline (`R/00`, `01`, `02`, `03`, in that order) and
-writes every figure under `images/` and every intermediate result under
-`res/`.
+This runs the full pipeline (`R/00`, `01`, `02`, `03`, in that order) and writes every figure under `images/` and every intermediate result under `res/`.
 
 ## Repository structure
 
-```
+```         
 data/                          S_x_df_Solea_solea_standardise.RData: standardized
                                 sole distribution data (see Data below)
 R/
@@ -48,7 +46,7 @@ R/
   02_eof_real_data.R            fits the three centering models (spatial,
                                 temporal, AMMI/double-centering) to the real
                                 data via SVD; also writes the res/*.RData
-                                objects the simulation script (04) calibrates on
+                                objects the simulation script (03) calibrates on
   03_simulation_metrics_figures.R
                                 simulation study recovering the true
                                 spatial/temporal/seasonal components under
@@ -67,24 +65,18 @@ run_all.R                       master script; sources R/00, 01, 02, 03 in order
 
 ## Data
 
-`data/S_x_df_Solea_solea_standardise.RData` contains the standardized
-spatio-temporal biomass index (`S_x`) per grid cell (`x`,`y`) and month
-(`Year_Month`) for common sole, already standardized as used in
-the manuscript's Bay of Biscay case study (2008-2018).
+`data/S_x_df_Solea_solea_standardise.RData` contains the standardized spatio-temporal biomass index (`S_x`) per grid cell (`x`,`y`) and month (`Year_Month`) for common sole, already standardized as used in the manuscript's Bay of Biscay case study (2008-2018).
 
 ## Mapping from script to manuscript/SM output
 
 | Script | Output |
-|---|---|
+|------------------------------------|------------------------------------|
 | `02_eof_real_data.R` | Figure 2 (right panel: spawning-ground overlay uses the same spatial support), Figure 4, Figure 5, Figure 6, Table 1, Table 2, SM Figure S1.4 (AMMI, 6 dimensions), SM Figure S1.5 (spatial centering, 6 dimensions), SM Figure S1.6 + accompanying text (AMMI residuals diagnostic) |
 | `03_simulation_metrics_figures.R` | Figure 3, SM Figure S1.1 (monthly maps of one simulated replicate), SM Figure S1.2 (main-effect recovery violin), SM Figure S1.3 (`eofs_c_full`-style panel for one simulated replicate) |
 
-SM Section S1.1 (degrees-of-freedom derivation) is a closed-form
-mathematical argument and has no associated code.
+SM Section S1.1 (degrees-of-freedom derivation) is a closed-form mathematical argument and has no associated code.
 
 ## Randomness / reproducibility notes
 
 - `set.seed(42)` is set at the top of `R/03_simulation_metrics_figures.R`.
-- `R/04` runs `n_reps <- 200` replicates, matching the manuscript
-  (SM Figure S1.2 states "across 200 simulation replicates"); this can be
-  reduced for a faster smoke test.
+- `R/04` runs `n_reps <- 200` replicates, matching the manuscript (SM Figure S1.2 states "across 200 simulation replicates"); this can be reduced for a faster smoke test.
